@@ -1,8 +1,13 @@
-use std::io::BufRead;
+use std::io::{stdin, stdout, BufRead, Write};
 
 use clap::{ArgAction, Parser};
 use regex::Regex;
 
+
+fn main() {
+    let args = Args::parse();
+    filter_stdin(args);
+}
 
 #[derive(Parser)]
 struct Args {
@@ -26,45 +31,29 @@ struct Args {
     after: Option<usize>,
 }
 
-fn main() {
-    let args = Args::parse();
-
-    if args.regex {
-        filter_stdin_by_regex(args);
-    } else {
-        filter_stdin_by_includes(args);
-    }
+enum PatternType {
+    Includes(String),
+    Regex(Regex),
 }
 
-/// filter the stdin lines according to the pattern and send to stdout
-fn filter_stdin_by_includes(args: Args) {
-    let stdin = std::io::stdin().lock();
+/// filter the stdin lines according to the selected pattern type
+fn filter_stdin(args: Args) {
+    let stdin = stdin().lock();
+    let pattern = match args.regex {
+        true => PatternType::Regex(Regex::new(&args.pattern).unwrap()),
+        false => PatternType::Includes(args.pattern),
+    };
 
     for line in stdin.lines() {
         let line = line.unwrap();
-        let matched = line.contains(&args.pattern);
+        let matched = match pattern {
+            PatternType::Includes(ref pattern) => line.contains(pattern),
+            PatternType::Regex(ref re) => re.is_match(&line),
+        };
 
-        if matched && !args.reverse {
-            println!("{}", line);
-        } else if !matched && args.reverse {
-            println!("{}", line);
-        }
-    }
-}
-
-/// filter the stdin lines according to the pattern and send to stdout
-fn filter_stdin_by_regex(args: Args) {
-    let stdin = std::io::stdin().lock();
-    let re = Regex::new(&args.pattern).unwrap();
-
-    for line in stdin.lines() {
-        let line = line.unwrap();
-        let matched = re.is_match(&line);
-
-        if matched && !args.reverse {
-            println!("{}", line);
-        } else if !matched && args.reverse {
-            println!("{}", line);
+        let should_print = matched && !args.reverse || !matched && matched;
+        if should_print {
+            stdout().write_all(line.as_bytes()).unwrap();
         }
     }
 }
