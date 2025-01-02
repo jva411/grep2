@@ -23,12 +23,12 @@ struct Args {
     reverse: bool,
 
     /// Number of lines before the match
-    #[arg(short, long)]
-    before: Option<usize>,
+    #[arg(short, long, default_value = "0")]
+    before: usize,
 
     /// Number of lines after the match
-    #[arg(short, long)]
-    after: Option<usize>,
+    #[arg(short, long, default_value = "0")]
+    after: usize,
 }
 
 enum PatternType {
@@ -43,6 +43,8 @@ fn filter_stdin(args: Args) {
         true => PatternType::Regex(Regex::new(&args.pattern).unwrap()),
         false => PatternType::Includes(args.pattern),
     };
+    let mut stdout = stdout();
+    let mut remaining_after = 0;
 
     for line in stdin.lines() {
         let line = line.unwrap();
@@ -52,8 +54,12 @@ fn filter_stdin(args: Args) {
         };
 
         let should_print = matched && !args.reverse || !matched && matched;
-        if should_print {
-            stdout().write_all(line.as_bytes()).unwrap();
+        if should_print || remaining_after > 0 {
+            stdout.write_all(line.as_bytes()).unwrap();
+            stdout.write_all(b"\n").unwrap();
+            stdout.flush().unwrap();
+
+            remaining_after = if should_print { args.after } else { remaining_after - 1 };
         }
     }
 }
