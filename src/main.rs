@@ -1,4 +1,4 @@
-use std::io::{stdin, stdout, BufRead, Write};
+use std::{collections::VecDeque, io::{stdin, stdout, BufRead, StdoutLock, Write}};
 
 use clap::{ArgAction, Parser};
 use regex::Regex;
@@ -43,8 +43,9 @@ fn filter_stdin(args: Args) {
         true => PatternType::Regex(Regex::new(&args.pattern).unwrap()),
         false => PatternType::Includes(args.pattern),
     };
-    let mut stdout = stdout();
+    let mut stdout = stdout().lock();
     let mut remaining_after = 0;
+    let mut remaining_before = VecDeque::with_capacity(args.before) as VecDeque<String>;
 
     for line in stdin.lines() {
         let line = line.unwrap();
@@ -54,12 +55,29 @@ fn filter_stdin(args: Args) {
         };
 
         let should_print = matched && !args.reverse || !matched && matched;
-        if should_print || remaining_after > 0 {
-            stdout.write_all(line.as_bytes()).unwrap();
-            stdout.write_all(b"\n").unwrap();
-            stdout.flush().unwrap();
+        if should_print {
+            if args.before > 0 {
+                for line in remaining_before.drain(..) {
+                    print_line(&mut stdout, &line);
+                }
+            }
 
-            remaining_after = if should_print { args.after } else { remaining_after - 1 };
+            print_line(&mut stdout, &line);
+            remaining_after = args.after;
+        } else if remaining_after > 0 {
+            print_line(&mut stdout, &line);
+            remaining_after -= 1;
+        } else if args.before > 0 {
+            if remaining_before.len() >= args.before {
+                remaining_before.pop_front();
+            }
+            remaining_before.push_back(line.clone());
         }
     }
+}
+
+fn print_line(stdout: &mut StdoutLock, line: &str) {
+    stdout.write_all(line.as_bytes()).unwrap();
+    stdout.write_all(b"\n").unwrap();
+    stdout.flush().unwrap();
 }
