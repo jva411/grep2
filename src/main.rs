@@ -54,7 +54,7 @@ fn filter_stdin(args: Args) {
             PatternType::Regex(ref re) => re.is_match(&line),
         };
 
-        let should_print = matched && !args.reverse || !matched && matched;
+        let should_print = matched && !args.reverse || !matched && args.reverse;
         if should_print {
             if args.before > 0 {
                 for line in remaining_before.drain(..) {
